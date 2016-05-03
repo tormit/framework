@@ -366,10 +366,29 @@ class UrlGenerator implements UrlGeneratorContract
         $path = preg_replace_callback('/\{.*?\}/', function ($match) use (&$parameters) {
             return (empty($parameters) && ! Str::endsWith($match[0], '?}'))
                         ? $match[0]
-                        : array_shift($parameters);
+                        : self::matchAndremove($match, $parameters);
         }, $path);
 
         return trim(preg_replace('/\{.*?\?\}/', '', $path), '/');
+    }
+
+    protected static function matchAndremove($match, array &$parameters)
+    {
+        //  sscanf($match[0], '{%s\?}', $key);
+        preg_match('/\{(\w+)\?\}/i',$match[0],$keys);
+        if(!isset($keys[1])) {
+            return null;
+        }
+        $key = $keys[1];
+
+
+        $value = null;
+        if (isset($parameters[$key])&&!is_array($parameters[$key])) {
+            $value = $parameters[$key];
+            unset($parameters[$key]);
+        }
+
+        return $value;
     }
 
     /**
