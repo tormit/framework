@@ -245,6 +245,12 @@ class HttpRequestTest extends PHPUnit_Framework_TestCase
         $this->assertEquals([], $request->except('age', 'name'));
     }
 
+    public function testIntersectMethod()
+    {
+        $request = Request::create('/', 'GET', ['name' => 'Taylor', 'age' => null]);
+        $this->assertEquals(['name' => 'Taylor'], $request->intersect('name', 'age', 'email'));
+    }
+
     public function testQueryMethod()
     {
         $request = Request::create('/', 'GET', ['name' => 'Taylor']);
@@ -576,7 +582,9 @@ class HttpRequestTest extends PHPUnit_Framework_TestCase
     public function testUserResolverMakesUserAvailableAsMagicProperty()
     {
         $request = Request::create('/', 'GET', [], [], [], ['HTTP_ACCEPT' => 'application/json']);
-        $request->setUserResolver(function () { return 'user'; });
+        $request->setUserResolver(function () {
+            return 'user';
+        });
         $this->assertEquals('user', $request->user());
     }
 

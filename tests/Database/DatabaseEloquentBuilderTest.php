@@ -207,7 +207,8 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
             new Collection([])
         );
 
-        $builder->chunkById(2, function ($results) {}, 'someIdField');
+        $builder->chunkById(2, function ($results) {
+        }, 'someIdField');
     }
 
     public function testPluckReturnsTheMutatedAttributesOfAModel()
@@ -271,8 +272,10 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
     public function testEagerLoadRelationsLoadTopLevelRelationships()
     {
         $builder = m::mock('Illuminate\Database\Eloquent\Builder[loadRelation]', [$this->getMockQueryBuilder()]);
-        $nop1 = function () {};
-        $nop2 = function () {};
+        $nop1 = function () {
+        };
+        $nop2 = function () {
+        };
         $builder->setEagerLoads(['foo' => $nop1, 'foo.bar' => $nop2]);
         $builder->shouldAllowMockingProtectedMethods()->shouldReceive('loadRelation')->with(['models'], 'foo', $nop1)->andReturn(['foo']);
 
@@ -283,7 +286,9 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
     public function testRelationshipEagerLoadProcess()
     {
         $builder = m::mock('Illuminate\Database\Eloquent\Builder[getRelation]', [$this->getMockQueryBuilder()]);
-        $builder->setEagerLoads(['orders' => function ($query) { $_SERVER['__eloquent.constrain'] = $query; }]);
+        $builder->setEagerLoads(['orders' => function ($query) {
+            $_SERVER['__eloquent.constrain'] = $query;
+        }]);
         $relation = m::mock('stdClass');
         $relation->shouldReceive('addEagerConstraints')->once()->with(['models']);
         $relation->shouldReceive('initRelation')->once()->with(['models'], 'orders')->andReturn(['models']);
@@ -357,13 +362,17 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Closure', $eagers['orders.lines']);
 
         $builder = $this->getBuilder();
-        $builder->with(['orders' => function () { return 'foo'; }]);
+        $builder->with(['orders' => function () {
+            return 'foo';
+        }]);
         $eagers = $builder->getEagerLoads();
 
         $this->assertEquals('foo', $eagers['orders']());
 
         $builder = $this->getBuilder();
-        $builder->with(['orders.lines' => function () { return 'foo'; }]);
+        $builder->with(['orders.lines' => function () {
+            return 'foo';
+        }]);
         $eagers = $builder->getEagerLoads();
 
         $this->assertInstanceOf('Closure', $eagers['orders']);
@@ -408,7 +417,9 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
         $builder->getQuery()->shouldReceive('addNestedWhereQuery')->once()->with($nestedRawQuery, 'and');
         $nestedQuery->shouldReceive('foo')->once();
 
-        $result = $builder->where(function ($query) { $query->foo(); });
+        $result = $builder->where(function ($query) {
+            $query->foo();
+        });
         $this->assertEquals($builder, $result);
     }
 
@@ -416,7 +427,9 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
     {
         $model = new EloquentBuilderTestNestedStub;
         $this->mockConnectionForModel($model, 'SQLite');
-        $query = $model->newQuery()->where('foo', '=', 'bar')->where(function ($query) { $query->where('baz', '>', 9000); });
+        $query = $model->newQuery()->where('foo', '=', 'bar')->where(function ($query) {
+            $query->where('baz', '>', 9000);
+        });
         $this->assertEquals('select * from "table" where "foo" = ? and ("baz" > ?) and "table"."deleted_at" is null', $query->toSql());
         $this->assertEquals(['bar', 9000], $query->getBindings());
     }
@@ -425,7 +438,9 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
     {
         $model = new EloquentBuilderTestNestedStub;
         $this->mockConnectionForModel($model, 'SQLite');
-        $query = $model->newQuery()->empty()->where('foo', '=', 'bar')->empty()->where(function ($query) { $query->empty()->where('baz', '>', 9000); });
+        $query = $model->newQuery()->empty()->where('foo', '=', 'bar')->empty()->where(function ($query) {
+            $query->empty()->where('baz', '>', 9000);
+        });
         $this->assertEquals('select * from "table" where "foo" = ? and ("baz" > ?) and "table"."deleted_at" is null', $query->toSql());
         $this->assertEquals(['bar', 9000], $query->getBindings());
     }
@@ -455,6 +470,49 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(['foo' => $builder], $builder->delete());
     }
 
+    public function testWithCount()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->withCount('foo');
+
+        $this->assertEquals('select *, (select count(*) from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id") as "foo_count" from "eloquent_builder_test_model_parent_stubs"', $builder->toSql());
+    }
+
+    public function testWithCountAndSelect()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->select('id')->withCount('foo');
+
+        $this->assertEquals('select "id", (select count(*) from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id") as "foo_count" from "eloquent_builder_test_model_parent_stubs"', $builder->toSql());
+    }
+
+    public function testWithCountAndMergedWheres()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->select('id')->withCount(['activeFoo' => function ($q) {
+            $q->where('bam', '>', 'qux');
+        }]);
+
+        $this->assertEquals('select "id", (select count(*) from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" and "bam" > ? and "active" = ?) as "active_foo_count" from "eloquent_builder_test_model_parent_stubs"', $builder->toSql());
+        $this->assertEquals(['qux', true], $builder->getBindings());
+    }
+
+    public function testWithCountAndContraintsAndHaving()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->where('bar', 'baz');
+        $builder->withCount(['foo' => function ($q) {
+            $q->where('bam', '>', 'qux');
+        }])->having('foo_count', '>=', 1);
+
+        $this->assertEquals('select *, (select count(*) from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" and "bam" > ?) as "foo_count" from "eloquent_builder_test_model_parent_stubs" where "bar" = ? having "foo_count" >= ?', $builder->toSql());
+        $this->assertEquals(['qux', 'baz', 1], $builder->getBindings());
+    }
+
     public function testHasWithContraintsAndHavingInSubquery()
     {
         $model = new EloquentBuilderTestModelParentStub;
@@ -468,13 +526,28 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(['baz', 'qux', 'quuux'], $builder->getBindings());
     }
 
+    public function testHasWithContraintsWithOrWhereAndHavingInSubquery()
+    {
+        $model = new EloquentBuilderTestModelParentStub;
+
+        $builder = $model->where('name', 'larry');
+        $builder->whereHas('address', function ($q) {
+            $q->where('zipcode', '90210');
+            $q->orWhere('zipcode', '90220');
+            $q->having('street', '=', 'fooside dr');
+        })->where('age', 29);
+
+        $this->assertEquals('select * from "eloquent_builder_test_model_parent_stubs" where "name" = ? and exists (select * from "eloquent_builder_test_model_close_related_stubs" where "eloquent_builder_test_model_parent_stubs"."foo_id" = "eloquent_builder_test_model_close_related_stubs"."id" and ("zipcode" = ? or "zipcode" = ?) having "street" = ?) and "age" = ?', $builder->toSql());
+        $this->assertEquals(['larry', '90210', '90220', 'fooside dr', 29], $builder->getBindings());
+    }
+
     public function testHasWithContraintsAndJoinAndHavingInSubquery()
     {
         $model = new EloquentBuilderTestModelParentStub;
         $builder = $model->where('bar', 'baz');
         $builder->whereHas('foo', function ($q) {
             $q->join('quuuux', function ($j) {
-               $j->on('quuuuux', '=', 'quuuuuux', 'and', true);
+                $j->on('quuuuux', '=', 'quuuuuux', 'and', true);
             });
             $q->having('bam', '>', 'qux');
         })->where('quux', 'quuux');
@@ -553,7 +626,7 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
 
         // alias has a dynamic hash, so replace with a static string for comparison
         $alias = 'self_alias_hash';
-        $aliasRegex = '/\b(self_[a-f0-9]{32})(\b|$)/i';
+        $aliasRegex = '/\b(laravel_reserved_\d)(\b|$)/i';
 
         $nestedSql = preg_replace($aliasRegex, $alias, $nestedSql);
         $dotSql = preg_replace($aliasRegex, $alias, $dotSql);
@@ -569,7 +642,7 @@ class DatabaseEloquentBuilderTest extends PHPUnit_Framework_TestCase
 
         // alias has a dynamic hash, so replace with a static string for comparison
         $alias = 'self_alias_hash';
-        $aliasRegex = '/\b(self_[a-f0-9]{32})(\b|$)/i';
+        $aliasRegex = '/\b(laravel_reserved_\d)(\b|$)/i';
 
         $sql = preg_replace($aliasRegex, $alias, $sql);
 
@@ -651,6 +724,16 @@ class EloquentBuilderTestModelParentStub extends Illuminate\Database\Eloquent\Mo
     public function foo()
     {
         return $this->belongsTo('EloquentBuilderTestModelCloseRelatedStub');
+    }
+
+    public function address()
+    {
+        return $this->belongsTo('EloquentBuilderTestModelCloseRelatedStub', 'foo_id');
+    }
+
+    public function activeFoo()
+    {
+        return $this->belongsTo('EloquentBuilderTestModelCloseRelatedStub', 'foo_id')->where('active', true);
     }
 }
 

@@ -1,8 +1,9 @@
 <?php
 
 use Mockery as m;
-use Symfony\Component\HttpFoundation\Request;
+use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Attempting;
+use Symfony\Component\HttpFoundation\Request;
 
 class AuthGuardTest extends PHPUnit_Framework_TestCase
 {
@@ -66,6 +67,7 @@ class AuthGuardTest extends PHPUnit_Framework_TestCase
         $guard = $this->getGuard();
         $guard->setDispatcher($events = m::mock('Illuminate\Contracts\Events\Dispatcher'));
         $events->shouldReceive('fire')->once()->with(m::type(Attempting::class));
+        $events->shouldReceive('fire')->once()->with(m::type(Failed::class));
         $guard->getProvider()->shouldReceive('retrieveByCredentials')->once()->with(['foo']);
         $guard->attempt(['foo']);
     }
@@ -88,6 +90,7 @@ class AuthGuardTest extends PHPUnit_Framework_TestCase
         $mock = $this->getGuard();
         $mock->setDispatcher($events = m::mock('Illuminate\Contracts\Events\Dispatcher'));
         $events->shouldReceive('fire')->once()->with(m::type(Attempting::class));
+        $events->shouldReceive('fire')->once()->with(m::type(Failed::class));
         $mock->getProvider()->shouldReceive('retrieveByCredentials')->once()->andReturn(null);
         $this->assertFalse($mock->attempt(['foo']));
     }
@@ -116,6 +119,35 @@ class AuthGuardTest extends PHPUnit_Framework_TestCase
         $mock->getSession()->shouldReceive('set')->with('foo', 'bar')->once();
         $session->shouldReceive('migrate')->once();
         $mock->login($user);
+    }
+
+    public function testFailedAttemptFiresFailedEvent()
+    {
+        $guard = $this->getGuard();
+        $guard->setDispatcher($events = m::mock('Illuminate\Contracts\Events\Dispatcher'));
+        $events->shouldReceive('fire')->once()->with(m::type(Attempting::class));
+        $events->shouldReceive('fire')->once()->with(m::type(Failed::class));
+        $guard->getProvider()->shouldReceive('retrieveByCredentials')->once()->with(['foo'])->andReturn(null);
+        $guard->attempt(['foo']);
+    }
+
+    public function testAuthenticateReturnsUserWhenUserIsNotNull()
+    {
+        $user = m::mock('Illuminate\Contracts\Auth\Authenticatable');
+        $guard = $this->getGuard()->setUser($user);
+
+        $this->assertEquals($user, $guard->authenticate());
+    }
+
+    /**
+     * @expectedException \Illuminate\Auth\AuthenticationException
+     */
+    public function testAuthenticateThrowsWhenUserIsNull()
+    {
+        $guard = $this->getGuard();
+        $guard->getSession()->shouldReceive('get')->once()->andReturn(null);
+
+        $guard->authenticate();
     }
 
     public function testIsAuthedReturnsTrueWhenUserIsNotNull()
@@ -270,6 +302,18 @@ class AuthGuardTest extends PHPUnit_Framework_TestCase
         $guard->shouldNotReceive('login');
 
         $this->assertFalse($guard->loginUsingId(11));
+    }
+
+    public function testOnceUsingIdSetsUser()
+    {
+        list($session, $provider, $request, $cookie) = $this->getMocks();
+        $guard = m::mock('Illuminate\Auth\SessionGuard', ['default', $provider, $session])->makePartial();
+
+        $user = m::mock('Illuminate\Contracts\Auth\Authenticatable');
+        $guard->getProvider()->shouldReceive('retrieveById')->once()->with(10)->andReturn($user);
+        $guard->shouldReceive('setUser')->once()->with($user);
+
+        $this->assertTrue($guard->onceUsingId(10));
     }
 
     public function testOnceUsingIdFailure()

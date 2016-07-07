@@ -82,8 +82,12 @@ class DatabaseEloquentCollectionTest extends PHPUnit_Framework_TestCase
         $mockModel2->shouldReceive('getKey')->andReturn(2);
         $c = new Collection([$mockModel1, $mockModel2]);
 
-        $this->assertTrue($c->contains(function ($k, $m) { return $m->getKey() < 2; }));
-        $this->assertFalse($c->contains(function ($k, $m) { return $m->getKey() > 2; }));
+        $this->assertTrue($c->contains(function ($k, $m) {
+            return $m->getKey() < 2;
+        }));
+        $this->assertFalse($c->contains(function ($k, $m) {
+            return $m->getKey() > 2;
+        }));
     }
 
     public function testFindMethodFindsModelById()
@@ -250,9 +254,34 @@ class DatabaseEloquentCollectionTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(get_class($a->zip(['a', 'b'], ['c', 'd'])), BaseCollection::class);
         $this->assertEquals(get_class($b->flip()), BaseCollection::class);
     }
+
+    public function testMakeVisibleRemovesHiddenAndIncludesVisible()
+    {
+        $c = new Collection([new TestEloquentCollectionModel]);
+        $c = $c->makeVisible('hidden');
+
+        $this->assertEquals([], $c[0]->getHidden());
+        $this->assertEquals(['visible', 'hidden'], $c[0]->getVisible());
+    }
+
+    public function testQueueableCollectionImplementation()
+    {
+        $c = new Collection([new TestEloquentCollectionModel, new TestEloquentCollectionModel]);
+        $this->assertEquals(TestEloquentCollectionModel::class, $c->getQueueableClass());
+    }
+
+    /**
+     * @expectedException LogicException
+     */
+    public function testQueueableCollectionImplementationThrowsExceptionOnMultipleModelTypes()
+    {
+        $c = new Collection([new TestEloquentCollectionModel, (object) ['id' => 'something']]);
+        $c->getQueueableClass();
+    }
 }
 
 class TestEloquentCollectionModel extends Illuminate\Database\Eloquent\Model
 {
+    protected $visible = ['visible'];
     protected $hidden = ['hidden'];
 }

@@ -1,6 +1,7 @@
 <?php
 
 use Mockery as m;
+use Carbon\Carbon;
 use Illuminate\Validation\Validator;
 use Symfony\Component\HttpFoundation\File\File;
 
@@ -111,7 +112,9 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $trans = $this->getRealTranslator();
         $trans->addResource('array', ['validation.required' => 'foo bar'], 'en', 'messages');
         $v = new Validator($trans, ['name' => ''], ['name' => 'Required']);
-        $v->addReplacer('required', function ($message, $attribute, $rule, $parameters) { return str_replace('bar', 'taylor', $message); });
+        $v->addReplacer('required', function ($message, $attribute, $rule, $parameters) {
+            return str_replace('bar', 'taylor', $message);
+        });
         $this->assertFalse($v->passes());
         $v->messages()->setFormat(':message');
         $this->assertEquals('foo taylor', $v->messages()->first('name'));
@@ -1575,13 +1578,18 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
             ['http://президент.рф/'],
             ['http://스타벅스코리아.com'],
             ['http://xn--d1abbgf6aiiy.xn--p1ai/'],
+            ['http://laravel.com?'],
+            ['http://laravel.com?q=1'],
+            ['http://laravel.com/?q=1'],
+            ['http://laravel.com#'],
+            ['http://laravel.com#fragment'],
+            ['http://laravel.com/#fragment'],
         ];
     }
 
     public function invalidUrls()
     {
         return [
-
             ['aslsdlks'],
             ['google.com'],
             ['://google.com'],
@@ -1590,8 +1598,6 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
             ['http://goog_le.com'],
             ['http://google.com::aa'],
             ['http://google.com:aa'],
-            ['http://laravel.com?'],
-            ['http://laravel.com#'],
             ['http://127.0.0.1:aa'],
             ['http://[::1'],
             ['foo://bar'],
@@ -1654,6 +1660,64 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $file6->expects($this->any())->method('guessExtension')->will($this->returnValue('svg'));
         $v->setFiles(['x' => $file6]);
         $this->assertTrue($v->passes());
+    }
+
+    public function testValidateImageDimensions()
+    {
+        // Knowing that demo image.gif has width = 3 and height = 2
+        $uploadedFile = new \Symfony\Component\HttpFoundation\File\UploadedFile(__DIR__.'/fixtures/image.gif', '', null, null, null, true);
+        $trans = $this->getRealTranslator();
+
+        $v = new Validator($trans, ['x' => 'file'], ['x' => 'dimensions']);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:min_width=1']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:min_width=5']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:max_width=10']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:max_width=1']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:min_height=1']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:min_height=5']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:max_height=10']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:max_height=1']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:width=3']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:height=2']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:min_height=2,ratio=3/2']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, [], ['x' => 'dimensions:ratio=1/1']);
+        $v->setFiles(['x' => $uploadedFile]);
+        $this->assertTrue($v->fails());
     }
 
     /**
@@ -1855,11 +1919,17 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $v = new Validator($trans, ['x' => '01/01/2000'], ['x' => 'date']);
         $this->assertTrue($v->passes());
 
+        $v = new Validator($trans, ['x' => '1325376000'], ['x' => 'date']);
+        $this->assertTrue($v->fails());
+
         $v = new Validator($trans, ['x' => 'Not a date'], ['x' => 'date']);
         $this->assertTrue($v->fails());
 
         $v = new Validator($trans, ['x' => ['Not', 'a', 'date']], ['x' => 'date']);
         $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, ['x' => new DateTime()], ['x' => 'date']);
+        $this->assertTrue($v->passes());
 
         $v = new Validator($trans, ['x' => '2000-01-01'], ['x' => 'date_format:Y-m-d']);
         $this->assertTrue($v->passes());
@@ -1887,10 +1957,22 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $v = new Validator($trans, ['x' => ['2000-01-01']], ['x' => 'Before:2012-01-01']);
         $this->assertFalse($v->passes());
 
+        $v = new Validator($trans, ['x' => new Carbon('2000-01-01')], ['x' => 'Before:2012-01-01']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['x' => [new Carbon('2000-01-01')]], ['x' => 'Before:2012-01-01']);
+        $this->assertFalse($v->passes());
+
         $v = new Validator($trans, ['x' => '2012-01-01'], ['x' => 'After:2000-01-01']);
         $this->assertTrue($v->passes());
 
         $v = new Validator($trans, ['x' => ['2012-01-01']], ['x' => 'After:2000-01-01']);
+        $this->assertFalse($v->passes());
+
+        $v = new Validator($trans, ['x' => new Carbon('2012-01-01')], ['x' => 'After:2000-01-01']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['x' => [new Carbon('2012-01-01')]], ['x' => 'After:2000-01-01']);
         $this->assertFalse($v->passes());
 
         $v = new Validator($trans, ['start' => '2012-01-01', 'ends' => '2013-01-01'], ['start' => 'After:2000-01-01', 'ends' => 'After:start']);
@@ -1904,6 +1986,21 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
 
         $v = new Validator($trans, ['start' => '2012-01-01', 'ends' => '2000-01-01'], ['start' => 'Before:ends', 'ends' => 'After:start']);
         $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, ['x' => new DateTime('2000-01-01')], ['x' => 'Before:2012-01-01']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['start' => new DateTime('2012-01-01'), 'ends' => new Carbon('2013-01-01')], ['start' => 'Before:ends', 'ends' => 'After:start']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['start' => '2012-01-01', 'ends' => new DateTime('2013-01-01')], ['start' => 'Before:ends', 'ends' => 'After:start']);
+        $this->assertTrue($v->passes());
+
+        $v = new Validator($trans, ['start' => new DateTime('2012-01-01'), 'ends' => new DateTime('2000-01-01')], ['start' => 'After:2000-01-01', 'ends' => 'After:start']);
+        $this->assertTrue($v->fails());
+
+        $v = new Validator($trans, ['start' => 'today', 'ends' => 'tomorrow'], ['start' => 'Before:ends', 'ends' => 'After:start']);
+        $this->assertTrue($v->passes());
     }
 
     public function testBeforeAndAfterWithFormat()
@@ -1972,27 +2069,37 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
     {
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['x' => 'foo'], ['x' => 'Required']);
-        $v->sometimes('x', 'Confirmed', function ($i) { return $i->x == 'foo'; });
+        $v->sometimes('x', 'Confirmed', function ($i) {
+            return $i->x == 'foo';
+        });
         $this->assertEquals(['x' => ['Required', 'Confirmed']], $v->getRules());
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['x' => 'foo'], ['x' => 'Required']);
-        $v->sometimes('x', 'Confirmed', function ($i) { return $i->x == 'bar'; });
+        $v->sometimes('x', 'Confirmed', function ($i) {
+            return $i->x == 'bar';
+        });
         $this->assertEquals(['x' => ['Required']], $v->getRules());
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['x' => 'foo'], ['x' => 'Required']);
-        $v->sometimes('x', 'Foo|Bar', function ($i) { return $i->x == 'foo'; });
+        $v->sometimes('x', 'Foo|Bar', function ($i) {
+            return $i->x == 'foo';
+        });
         $this->assertEquals(['x' => ['Required', 'Foo', 'Bar']], $v->getRules());
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['x' => 'foo'], ['x' => 'Required']);
-        $v->sometimes('x', ['Foo', 'Bar:Baz'], function ($i) { return $i->x == 'foo'; });
+        $v->sometimes('x', ['Foo', 'Bar:Baz'], function ($i) {
+            return $i->x == 'foo';
+        });
         $this->assertEquals(['x' => ['Required', 'Foo', 'Bar:Baz']], $v->getRules());
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['foo' => [['name' => 'first', 'title' => null]]], []);
-        $v->sometimes('foo.*.name', 'Required|String', function ($i) { return $i['foo'][0]['title'] === null; });
+        $v->sometimes('foo.*.name', 'Required|String', function ($i) {
+            return $i['foo'][0]['title'] === null;
+        });
         $this->assertEquals(['foo.0.name' => ['Required', 'String']], $v->getRules());
     }
 
@@ -2001,7 +2108,9 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $trans = $this->getRealTranslator();
         $trans->addResource('array', ['validation.foo' => 'foo!'], 'en', 'messages');
         $v = new Validator($trans, ['name' => 'taylor'], ['name' => 'foo']);
-        $v->addExtension('foo', function () { return false; });
+        $v->addExtension('foo', function () {
+            return false;
+        });
         $this->assertFalse($v->passes());
         $v->messages()->setFormat(':message');
         $this->assertEquals('foo!', $v->messages()->first('name'));
@@ -2009,14 +2118,18 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $trans = $this->getRealTranslator();
         $trans->addResource('array', ['validation.foo_bar' => 'foo!'], 'en', 'messages');
         $v = new Validator($trans, ['name' => 'taylor'], ['name' => 'foo_bar']);
-        $v->addExtension('FooBar', function () { return false; });
+        $v->addExtension('FooBar', function () {
+            return false;
+        });
         $this->assertFalse($v->passes());
         $v->messages()->setFormat(':message');
         $this->assertEquals('foo!', $v->messages()->first('name'));
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['name' => 'taylor'], ['name' => 'foo_bar']);
-        $v->addExtension('FooBar', function () { return false; });
+        $v->addExtension('FooBar', function () {
+            return false;
+        });
         $v->setFallbackMessages(['foo_bar' => 'foo!']);
         $this->assertFalse($v->passes());
         $v->messages()->setFormat(':message');
@@ -2024,7 +2137,9 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
 
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, ['name' => 'taylor'], ['name' => 'foo_bar']);
-        $v->addExtensions(['FooBar' => function () { return false; }]);
+        $v->addExtensions(['FooBar' => function () {
+            return false;
+        }]);
         $v->setFallbackMessages(['foo_bar' => 'foo!']);
         $this->assertFalse($v->passes());
         $v->messages()->setFormat(':message');
@@ -2045,11 +2160,27 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $this->assertEquals('foo!', $v->messages()->first('name'));
     }
 
+    public function testClassBasedCustomValidatorsUsingConventionalMethod()
+    {
+        $trans = $this->getRealTranslator();
+        $trans->addResource('array', ['validation.foo' => 'foo!'], 'en', 'messages');
+        $v = new Validator($trans, ['name' => 'taylor'], ['name' => 'foo']);
+        $v->setContainer($container = m::mock('Illuminate\Container\Container'));
+        $v->addExtension('foo', 'Foo');
+        $container->shouldReceive('make')->once()->with('Foo')->andReturn($foo = m::mock('StdClass'));
+        $foo->shouldReceive('validate')->once()->andReturn(false);
+        $this->assertFalse($v->passes());
+        $v->messages()->setFormat(':message');
+        $this->assertEquals('foo!', $v->messages()->first('name'));
+    }
+
     public function testCustomImplicitValidators()
     {
         $trans = $this->getRealTranslator();
         $v = new Validator($trans, [], ['implicit_rule' => 'foo']);
-        $v->addImplicitExtension('implicit_rule', function () { return true; });
+        $v->addImplicitExtension('implicit_rule', function () {
+            return true;
+        });
         $this->assertTrue($v->passes());
     }
 
@@ -2694,22 +2825,22 @@ class ValidationValidatorTest extends PHPUnit_Framework_TestCase
         $trans = $this->getRealTranslator();
 
         $v = new Validator($trans, ['foo' => [
-            ['start' => '2016-04-19', 'end' => '2046-04-19'],
+            ['start' => '2016-04-19', 'end' => '2017-04-19'],
         ]], ['foo.*.start' => ['before:foo.*.end']]);
         $this->assertTrue($v->passes());
 
         $v = new Validator($trans, ['foo' => [
-            ['start' => '2016-04-19', 'end' => '2046-04-19'],
+            ['start' => '2016-04-19', 'end' => '2017-04-19'],
         ]], ['foo.*.end' => ['before:foo.*.start']]);
         $this->assertTrue($v->fails());
 
         $v = new Validator($trans, ['foo' => [
-            ['start' => '2016-04-19', 'end' => '2046-04-19'],
+            ['start' => '2016-04-19', 'end' => '2017-04-19'],
         ]], ['foo.*.end' => ['after:foo.*.start']]);
         $this->assertTrue($v->passes());
 
         $v = new Validator($trans, ['foo' => [
-            ['start' => '2016-04-19', 'end' => '2046-04-19'],
+            ['start' => '2016-04-19', 'end' => '2017-04-19'],
         ]], ['foo.*.start' => ['after:foo.*.end']]);
         $this->assertTrue($v->fails());
     }

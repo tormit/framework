@@ -68,6 +68,13 @@ class BelongsToMany extends Relation
     protected $pivotUpdatedAt;
 
     /**
+     * The count of self joins.
+     *
+     * @var int
+     */
+    protected static $selfJoinCount = 0;
+
+    /**
      * Create a new belongs to many relationship instance.
      *
      * @param  \Illuminate\Database\Eloquent\Builder  $query
@@ -182,7 +189,7 @@ class BelongsToMany extends Relation
             return $model;
         }
 
-        throw new ModelNotFoundException;
+        throw (new ModelNotFoundException)->setModel(get_class($this->parent));
     }
 
     /**
@@ -376,7 +383,7 @@ class BelongsToMany extends Relation
      */
     public function getRelationCountHash()
     {
-        return 'self_'.md5(microtime(true));
+        return 'laravel_reserved_'.static::$selfJoinCount++;
     }
 
     /**
@@ -809,7 +816,7 @@ class BelongsToMany extends Relation
 
         // Next, we will take the differences of the currents and given IDs and detach
         // all of the entities that exist in the "current" array but are not in the
-        // the array of the IDs given to the method which will complete the sync.
+        // array of the new IDs given to the method which will complete the sync.
         if ($detaching && count($detach) > 0) {
             $this->detach($detach);
 
@@ -1235,7 +1242,7 @@ class BelongsToMany extends Relation
      */
     public function getRelatedFreshUpdate()
     {
-        return [$this->related->getUpdatedAtColumn() => $this->related->freshTimestamp()];
+        return [$this->related->getUpdatedAtColumn() => $this->related->freshTimestampString()];
     }
 
     /**

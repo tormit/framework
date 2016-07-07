@@ -345,11 +345,12 @@ class Filesystem
      * Get all of the files from the given directory (recursive).
      *
      * @param  string  $directory
+     * @param  bool  $hidden
      * @return array
      */
-    public function allFiles($directory)
+    public function allFiles($directory, $hidden = false)
     {
-        return iterator_to_array(Finder::create()->files()->in($directory), false);
+        return iterator_to_array(Finder::create()->files()->ignoreDotFiles(! $hidden)->in($directory), false);
     }
 
     /**
@@ -385,6 +386,29 @@ class Filesystem
         }
 
         return mkdir($path, $mode, $recursive);
+    }
+
+    /**
+     * Move a directory.
+     *
+     * @param  string  $from
+     * @param  string  $to
+     * @param  bool  $overwrite
+     * @return bool
+     */
+    public function moveDirectory($from, $to, $overwrite = false)
+    {
+        if ($overwrite && $this->isDirectory($to)) {
+            $this->deleteDirectory($to);
+
+            $this->copyDirectory($from, $to);
+
+            $this->deleteDirectory($from);
+
+            return true;
+        }
+
+        return @rename($from, $to) === true;
     }
 
     /**
