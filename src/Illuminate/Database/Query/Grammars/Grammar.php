@@ -152,7 +152,7 @@ class Grammar extends BaseGrammar
             // Cross joins generate a cartesian product between this first table and a joined
             // table. In case the user didn't specify any "on" clauses on the join we will
             // append this SQL and jump right back into the next iteration of this loop.
-            if ($type === 'cross' &&  ! $join->clauses) {
+            if ($type === 'cross' && ! $join->clauses) {
                 $sql[] = "cross join $table";
 
                 continue;
@@ -458,6 +458,18 @@ class Grammar extends BaseGrammar
     protected function whereDate(Builder $query, $where)
     {
         return $this->dateBasedWhere('date', $query, $where);
+    }
+
+    /**
+     * Compile a "where time" clause.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array  $where
+     * @return string
+     */
+    protected function whereTime(Builder $query, $where)
+    {
+        return $this->dateBasedWhere('time', $query, $where);
     }
 
     /**

@@ -6,8 +6,8 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Capsule\Manager as DB;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Database\Eloquent\Model as Eloquent;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DatabaseEloquentSoftDeletesIntegrationTest extends PHPUnit_Framework_TestCase
 {
@@ -190,6 +190,21 @@ class DatabaseEloquentSoftDeletesIntegrationTest extends PHPUnit_Framework_TestC
 
         $this->assertCount(1, $users);
         $this->assertEquals(1, $users->first()->id);
+    }
+
+    public function testOnlyWithoutTrashedOnlyReturnsTrashedRecords()
+    {
+        $this->createUsers();
+
+        $users = SoftDeletesTestUser::withoutTrashed()->get();
+
+        $this->assertCount(1, $users);
+        $this->assertEquals(2, $users->first()->id);
+
+        $users = SoftDeletesTestUser::withTrashed()->withoutTrashed()->get();
+
+        $this->assertCount(1, $users);
+        $this->assertEquals(2, $users->first()->id);
     }
 
     public function testFirstOrNew()

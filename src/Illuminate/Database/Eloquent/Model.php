@@ -22,11 +22,11 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection as BaseCollection;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -2141,6 +2141,23 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
     }
 
     /**
+     * Make the given, typically visible, attributes hidden.
+     *
+     * @param  array|string  $attributes
+     * @return $this
+     */
+    public function makeHidden($attributes)
+    {
+        $attributes = (array) $attributes;
+
+        $this->visible = array_diff($this->visible, $attributes);
+
+        $this->hidden = array_unique(array_merge($this->hidden, $attributes));
+
+        return $this;
+    }
+
+    /**
      * Make the given, typically hidden, attributes visible.
      *
      * @param  array|string  $attributes
@@ -2595,10 +2612,14 @@ abstract class Model implements ArrayAccess, Arrayable, Jsonable, JsonSerializab
     protected function getArrayableItems(array $values)
     {
         if (count($this->getVisible()) > 0) {
-            return array_intersect_key($values, array_flip($this->getVisible()));
+            $values = array_intersect_key($values, array_flip($this->getVisible()));
         }
 
-        return array_diff_key($values, array_flip($this->getHidden()));
+        if (count($this->getHidden()) > 0) {
+            $values = array_diff_key($values, array_flip($this->getHidden()));
+        }
+
+        return $values;
     }
 
     /**
